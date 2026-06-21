@@ -50,7 +50,6 @@ from telegram import (
     ChatMemberUpdated,
     User,
     Chat,
-    ChatType,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
 )
@@ -580,8 +579,8 @@ async def handle_anonymous_message(
 
     sender_chat = message.sender_chat
 
-    # ✅ FIX: ChatType enum se compare karo (string se nahi)
-    if sender_chat.type not in [ChatType.CHANNEL, "channel"]:
+    # ✅ Channel type check (string comparison)
+    if sender_chat.type != "channel":
         return
 
     channel_id = sender_chat.id
