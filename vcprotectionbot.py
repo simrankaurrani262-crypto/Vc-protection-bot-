@@ -1301,7 +1301,8 @@ application.add_handler(
     # ========================================================================
     # ERROR HANDLER
     # ========================================================================
-    application.add_error_handler(error_handler)
+    application.add_error_handler(error_handler
+    )
     
     print("✅ All handlers registered!")
     print("🛡️ Protection Layers:")
