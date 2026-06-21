@@ -50,6 +50,7 @@ from telegram import (
     ChatMemberUpdated,
     User,
     Chat,
+    ChatType,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
 )
@@ -438,7 +439,8 @@ async def safe_ban_chat_member(
     revoke_messages: bool = True,
 ) -> bool:
     """
-    Safe ban function with error handling.
+    Safe ban function with detailed error handling.
+    Channel ID se aaye premium user ko ban karne ke liye.
     Returns True if ban successful, False otherwise.
     """
     try:
@@ -448,16 +450,27 @@ async def safe_ban_chat_member(
             revoke_messages=revoke_messages,
         )
         return True
-    except Forbidden:
-        logger.error(f"❌ Bot ko 'Ban Users' permission nahi mila chat {chat_id} mein")
+    except Forbidden as e:
+        err_msg = str(e).lower()
+        if "bot is not a member" in err_msg:
+            logger.error(f"❌ Bot group {chat_id} ka member nahi hai")
+        elif "bot is not an administrator" in err_msg:
+            logger.error(f"❌ Bot group {chat_id} mein admin nahi hai")
+        else:
+            logger.error(f"❌ Bot ko 'Ban Users' permission nahi mila chat {chat_id} mein | Error: {e}")
         return False
     except BadRequest as e:
-        if "Not enough rights" in str(e):
-            logger.error(f"❌ Bot ke paas ban karne ka right nahi hai")
-        elif "USER_ADMIN_INVALID" in str(e):
-            logger.warning(f"⚠️ Admin user {user_id} ko ban nahi kar sakte")
-        elif "Participant_id_invalid" in str(e):
+        err_msg = str(e)
+        if "Not enough rights" in err_msg:
+            logger.error(f"❌ Bot ke paas ban karne ka right nahi hai. Admin > 'Ban Users' permission check karo.")
+        elif "USER_ADMIN_INVALID" in err_msg:
+            logger.warning(f"⚠️ User {user_id} admin hai ya invalid hai, ban nahi kar sakte")
+        elif "Participant_id_invalid" in err_msg:
             logger.warning(f"⚠️ Invalid participant ID: {user_id}")
+        elif "can't remove chat owner" in err_msg:
+            logger.warning(f"⚠️ Chat owner {user_id} ko ban nahi kar sakte")
+        elif "user not found" in err_msg.lower():
+            logger.warning(f"⚠️ User {user_id} group mein nahi mila")
         else:
             logger.error(f"❌ Ban failed for {user_id}: {e}")
         return False
@@ -492,42 +505,44 @@ async def ban_anonymous_entity(
     source: str,
 ) -> bool:
     """
-    Main ban function - anonymous entity ko ban karo.
-    
+    Main ban function - anonymous/premium entity ko group se BAN karo.
+
     Args:
         entity_id: Channel/User ID to ban
         entity_name: Display name
         source: Detection source (Text/Join/Scan/etc)
-    
+
     Returns:
         True if banned successfully
     """
     chat_id = update.effective_chat.id
-    
-    # Duplicate check
+
+    logger.info(f"🔨 BAN ATTEMPT | Entity: {entity_name} (ID: {entity_id}) | Chat: {chat_id} | Source: {source}")
+
+    # Duplicate check (cooldown)
     if is_recently_banned(entity_id):
-        logger.info(f"⏭️ Entity {entity_id} recently banned, skipping")
+        logger.info(f"⏭️ Entity {entity_id} recently banned (cooldown), skipping")
         return False
-    
+
     # Ban attempt
     success = await safe_ban_chat_member(context, chat_id, entity_id)
-    
+
     if success:
         mark_banned(entity_id)
         banned_count[chat_id] = banned_count.get(chat_id, 0) + 1
-        
-        # Notification
+
+        # Group notification
         if NOTIFY_GROUP:
             try:
                 msg = (
-                    f"🚫 <b>Anonymous User Banned</b>\n\n"
-                    f"📛 Entity: <code>{entity_name}</code>\n"
+                    f"🚫 <b>Premium User BANNED</b>\n\n"
+                    f"👤 User: <code>{entity_name}</code>\n"
                     f"🆔 ID: <code>{entity_id}</code>\n"
-                    f"📍 Source: {source}\n"
+                    f"📍 Trigger: {source}\n"
                     f"⏰ Time: {datetime.now().strftime('%H:%M:%S')}\n\n"
-                    f"⚠️ Reason: Anonymous channel ID se activity detected.\n"
-                    f"🎙️ User VC se bhi kick ho gaya hai.\n\n"
-                    f"<i>Real account se aao — anonymous allowed nahi hai.</i>"
+                    f"⚠️ <b>Reason:</b> Channel ID se message bheja.\n"
+                    f"🎙️ Ye user VC se bhi kick ho gaya hai.\n\n"
+                    f"<i>⚡ Real account se aao — anonymous messages allowed nahi hai.</i>"
                 )
                 await context.bot.send_message(
                     chat_id=chat_id,
@@ -537,11 +552,12 @@ async def ban_anonymous_entity(
                 )
             except Exception as e:
                 logger.warning(f"Could not send ban notification: {e}")
-        
-        logger.warning(f"🚫 BANNED: {entity_name} (ID: {entity_id}) from {source}")
+
+        logger.warning(f"✅ BANNED SUCCESSFULLY: {entity_name} (ID: {entity_id}) | Source: {source}")
         return True
-    
-    return False
+    else:
+        logger.error(f"❌ BAN FAILED: {entity_name} (ID: {entity_id}) | Check bot permissions!")
+        return False
 
 
 # ============================================================================
@@ -553,42 +569,50 @@ async def handle_anonymous_message(
     context: ContextTypes.DEFAULT_TYPE,
 ) -> None:
     """
-    Jab koi user apne channel ke zariye (anonymous) text message bheje.
-    Ye sabse reliable detection method hai.
+    Jab koi premium user apne channel ke zariye (anonymous) text message bheje,
+    usko turant group se BAN karo. Message delete bhi karo.
     """
     message = update.message
     chat = update.effective_chat
-    
+
     if not message or not message.sender_chat:
         return
-    
+
     sender_chat = message.sender_chat
-    
-    # Sirf channels ko target karo (groups nahi)
-    if sender_chat.type not in ["channel"]:
+
+    # ✅ FIX: ChatType enum se compare karo (string se nahi)
+    if sender_chat.type not in [ChatType.CHANNEL, "channel"]:
         return
-    
+
     channel_id = sender_chat.id
-    channel_title = sender_chat.title or "Unknown Channel"
-    
+    channel_title = getattr(sender_chat, 'title', None) or "Unknown Channel"
+
     logger.info(
-        f"📢 Anonymous message detected from channel: "
-        f"{channel_title} (ID: {channel_id})"
+        f"🚫 PREMIUM/ANONYMOUS msg detected | "
+        f"Channel: {channel_title} (ID: {channel_id}) | "
+        f"Banning user NOW..."
     )
-    
+
+    # ===== PEHLE BAN KARO, PHIR DELETE KARO =====
+    # (Agar pehle delete kar diya toh update mein message info lost ho jayegi)
+
     if BAN_ANONYMOUS_TEXT:
-        # Message delete karo
-        if DELETE_ABUSE_MESSAGES:
-            await safe_delete_message(context, chat.id, message.message_id)
-        
-        # Channel ko ban karo
-        await ban_anonymous_entity(
+        # 🔴 STEP 1: User ko BAN karo (priority #1)
+        ban_success = await ban_anonymous_entity(
             update=update,
             context=context,
             entity_id=channel_id,
             entity_name=channel_title,
-            source="Text Message (sender_chat)",
+            source="Premium User - Channel Message (Auto-Ban)",
         )
+
+        if ban_success:
+            logger.info(f"✅ BANNED: {channel_title} (ID: {channel_id})")
+        else:
+            logger.warning(f"❌ BAN FAILED for: {channel_title} (ID: {channel_id})")
+
+    # 🗑️ STEP 2: Message delete karo (ban ke baad)
+    await safe_delete_message(context, chat.id, message.message_id)
 
 
 # ============================================================================
@@ -1226,11 +1250,12 @@ def main() -> None:
         return
     
     print("=" * 60)
-    print("🔒 VC Ban Bot (Force Join Edition) Starting...")
+    print("🔒 VC Ban Bot (Premium Auto-Ban Edition) Starting...")
     print("=" * 60)
     print(f"🎯 Force Join: {'ENABLED' if FORCE_JOIN_ENABLED else 'DISABLED'}")
     print(f"🔴 Channel: {SUPPORT_CHANNEL_LINK}")
     print(f"🟢 Group: {SUPPORT_GROUP_LINK}")
+    print("⚡ NEW: Premium users → Channel msg → INSTANT BAN")
     print("=" * 60)
     
     # Build application
@@ -1304,6 +1329,7 @@ def main() -> None:
     application.add_error_handler(error_handler)
     print("✅ All handlers registered!")
     print("🛡️ Protection Layers:")
+    print("   • 🚨 Premium user channel msg → AUTO BAN ✅")
     print("   • Anonymous text detection → ACTIVE")
     print("   • Anonymous join detection → ACTIVE")
     print("   • Abuse detection → ACTIVE")
