@@ -38,7 +38,7 @@ SETUP:
 4. Bot ko group mein admin banao with "Ban Users" permission
 5. @BotFather se Group Privacy OFF karo
 """
-
+import os
 import logging
 import asyncio
 from datetime import datetime, timedelta
@@ -1291,19 +1291,12 @@ def main() -> None:
     
     # Voice chat started
     application.add_handler(
-        MessageHandler(
-            filters.VIDEO_CHAT_STARTED & filters.ChatType.GROUPS,
-            handle_voice_chat_started,
-        )
-    )
-    
-    # Voice chat ended
-    application.add_handler(
-        MessageHandler(
-            filters.VIDEO_CHAT_ENDED & filters.ChatType.GROUPS,
-            handle_voice_chat_ended,
-        )
-    )
+    ChatMemberHandler(handle_voice_chat_started, ChatMemberHandler.CHAT_MEMBER)
+)
+
+application.add_handler(
+    ChatMemberHandler(handle_voice_chat_ended, ChatMemberHandler.CHAT_MEMBER)
+)
     
     # ========================================================================
     # ERROR HANDLER
