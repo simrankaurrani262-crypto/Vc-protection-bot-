@@ -1291,19 +1291,17 @@ def main() -> None:
     
     # Voice chat started
     application.add_handler(
-    ChatMemberHandler(handle_voice_chat_started, ChatMemberHandler.CHAT_MEMBER)
-)
+        ChatMemberHandler(handle_voice_chat_started, ChatMemberHandler.CHAT_MEMBER)
+    )
 
-application.add_handler(
-    ChatMemberHandler(handle_voice_chat_ended, ChatMemberHandler.CHAT_MEMBER)
-)
-    
+    application.add_handler(
+        ChatMemberHandler(handle_voice_chat_ended, ChatMemberHandler.CHAT_MEMBER)
+    )
+
     # ========================================================================
     # ERROR HANDLER
     # ========================================================================
-    application.add_error_handler(error_handler
-    )
-    
+    application.add_error_handler(error_handler)
     print("✅ All handlers registered!")
     print("🛡️ Protection Layers:")
     print("   • Anonymous text detection → ACTIVE")
