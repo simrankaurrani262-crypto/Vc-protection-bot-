@@ -82,7 +82,7 @@ threading.Thread(target=run_web, daemon=True).start()
 # ============================================================================
 
 # Aapka bot token (@BotFather se)
-BOT_TOKEN = "YOUR_BOT_TOKEN_HERE"
+BOT_TOKEN = "8976419802:AAGHCsN57MRc97l0jQgU5sNFNXQEZFeHtC8"
 
 # 🎯 FORCE JOIN SETTINGS
 # Bot use karne se pehle users ko yeh channels join karne honge
