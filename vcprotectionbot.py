@@ -74,8 +74,8 @@ BOT_TOKEN = "YOUR_BOT_TOKEN_HERE"
 # 🎯 FORCE JOIN SETTINGS
 # Bot use karne se pehle users ko yeh channels join karne honge
 FORCE_JOIN_ENABLED = True          # Force join system ON/OFF
-FORCE_JOIN_CHANNEL = "-1002130566468"  # Support Channel ID (numeric)
-FORCE_JOIN_GROUP = "-1002434013644"    # Support Group ID (numeric)
+FORCE_JOIN_CHANNEL = "-1004344057397"  # Support Channel ID (numeric)
+FORCE_JOIN_GROUP = "-1002811434860"    # Support Group ID (numeric)
 
 # Force Join messages customize karne ke liye
 FORCE_JOIN_CHANNEL_USERNAME = "Globall_X"        # Channel username (bina @ ke)
